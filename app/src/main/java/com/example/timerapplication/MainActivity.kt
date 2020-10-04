@@ -27,11 +27,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     enum class TimerState{
-        Running, Failed, Succeeded
+        Running, Succeeded, Done
     }
 
     private lateinit var timer: CountDownTimer
-    private var timerLengthSeconds: Long = 0
+    private var timerLengthSeconds: Long = PrefUtil.getTimerLength(this) * 60L
     private var timerState = TimerState.Running
     private var secondsRemaining: Long = 0
 
@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(toolbar)
         supportActionBar?.setIcon(R.drawable.ic_timer)
         supportActionBar?.title = "      🖐🤚 Minutes"
-        PrefUtil.setTimerState(TimerState.Running, this)
+        PrefUtil.setTimerState(TimerState.Done, this)
         initTimer()
     }
 
@@ -51,12 +51,6 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         initTimer()
-
-        // TODO: Implementation for auto-countdown
-        if (timerState != TimerState.Failed && timerState != TimerState.Succeeded){
-            startTimer()
-            timerState = TimerState.Running
-        }
     }
 
     /*
@@ -67,39 +61,46 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         timer.cancel()
-        if (timerState == TimerState.Running){
-            var pm = this.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
-            if (pm.isInteractive){
-                // This means we left the app with time to spare - we want to remove the streak
-                PrefUtil.setStreak(0, this)
-                PrefUtil.setTimerState(TimerState.Failed, this)
-            } else{
-                // This means the user probably put the app to sleep we want to allow this action
-                PrefUtil.setPreviousTimerLengthSeconds(timerLengthSeconds, this)
-                PrefUtil.setSecondsRemaining(secondsRemaining, this)
+
+        when(timerState) {
+            TimerState.Running -> {
+                var pm = this.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+                if (pm.isInteractive){
+                    // This means we left the app with time to spare - we want to remove the streak
+                    PrefUtil.setStreak(0, this)
+                    PrefUtil.setTimerState(TimerState.Done, this)
+                    PrefUtil.setSecondsRemaining(timerLengthSeconds, this)
+                } else {
+                    // This means the user probably put the app to sleep we want to allow this action
+                    PrefUtil.setSecondsRemaining(secondsRemaining, this)
+                    PrefUtil.setTimerState(timerState, this)
+                }
+            }
+            TimerState.Done -> {
                 PrefUtil.setTimerState(timerState, this)
             }
-
-        } else if (timerState == TimerState.Paused){
-            //NotificationUtil.showTimerPaused(this)
-        } else if (timerState == TimerState.Stopped){
-            PrefUtil.setPreviousTimerLengthSeconds(timerLengthSeconds, this)
-            PrefUtil.setSecondsRemaining(secondsRemaining, this)
-            PrefUtil.setTimerState(timerState, this)
-        } else if (timerState == TimerState.Done) {
-            timerState = TimerState.Succeeded
-            PrefUtil.setTimerState(timerState, this)
+            TimerState.Succeeded -> {
+                var pm = this.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+                if (pm.isInteractive) {
+                    // This means we left the app - we want to reset to the Done state
+                    PrefUtil.setTimerState(TimerState.Done, this)
+                } else {
+                    // User just put the app to sleep we want to remain in this state until the user leaves the app
+                    PrefUtil.setTimerState(TimerState.Succeeded, this)
+                }
+            }
         }
     }
 
     private fun initTimer(){
         timerState = PrefUtil.getTimerState(this)
-        if (timerState == TimerState.Stopped || timerState == TimerState.Done)
-            setNewTimerLength()
-        else
-            setPreviousTimerLength()
 
-        secondsRemaining = if (timerState == TimerState.Running || timerState == TimerState.Paused)
+        if (timerState == TimerState.Done || timerState == TimerState.Running){
+            startTimer()
+            PrefUtil.setTimerState(TimerState.Running, this)
+        }
+
+        secondsRemaining = if (timerState == TimerState.Running)
             PrefUtil.getSecondsRemaining(this)
         else
             timerLengthSeconds
@@ -110,35 +111,27 @@ class MainActivity : AppCompatActivity() {
             // gives us the amount of time the app was running in the background
             secondsRemaining -= nowSeconds - alarmSetTime
 
-        if (secondsRemaining <= 0 || timerState == TimerState.Done) {
+        if (secondsRemaining <= 0) {
             // finished in the background
             onTimerFinished()
-        } else if (timerState == TimerState.Running)
-            //startTimer()
+        }
 
-        //updateButtons()
         updateCountdownUI()
     }
     @TargetApi(20)
     private fun onTimerFinished(){
-        timerState = TimerState.Done
         // means user has stayed for 10 mins and we can increment the counter
         var streak = PrefUtil.getStreak(this)
         streak += 1
         PrefUtil.setStreak(streak, this)
 
-        //set the length of the timer to be the one set in SettingsActivity
-        //if the length was changed when the timer was running
-        setNewTimerLength()
 
-        progress_countdown.progress = 0
+        // progress_countdown.progress = 0
 
         PrefUtil.setSecondsRemaining(timerLengthSeconds, this)
         secondsRemaining = timerLengthSeconds
 
-        //updateButtons()
         updateCountdownUI()
-
     }
 
     private fun startTimer(){
@@ -152,17 +145,6 @@ class MainActivity : AppCompatActivity() {
                 updateCountdownUI()
             }
         }.start()
-    }
-
-    private fun setNewTimerLength(){
-        val lengthInMinutes = PrefUtil.getTimerLength(this)
-        timerLengthSeconds = (lengthInMinutes * 60L)
-        progress_countdown.max = timerLengthSeconds.toInt()
-    }
-
-    private fun setPreviousTimerLength(){
-        timerLengthSeconds = PrefUtil.getPreviousTimerLengthSeconds(this)
-        progress_countdown.max = timerLengthSeconds.toInt()
     }
 
     private fun updateCountdownUI(){
