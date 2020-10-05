@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity() {
 
         when(timerState) {
             TimerState.Running -> {
+                PrefUtil.setAlarmSetTime(nowSeconds, this)
                 var pm = this.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
                 if (pm.isInteractive){
                     // This means we left the app with time to spare - we want to remove the streak
@@ -98,6 +99,7 @@ class MainActivity : AppCompatActivity() {
         if (timerState == TimerState.Done || timerState == TimerState.Running){
             startTimer()
             PrefUtil.setTimerState(TimerState.Running, this)
+            progress_countdown.progress = 0
         }
 
         secondsRemaining = if (timerState == TimerState.Running)
@@ -106,12 +108,12 @@ class MainActivity : AppCompatActivity() {
             timerLengthSeconds
 
         val alarmSetTime = PrefUtil.getAlarmSetTime(this)
+
         // alarm was set if the value is greater than 0
         if (alarmSetTime > 0)
             // gives us the amount of time the app was running in the background
             secondsRemaining -= nowSeconds - alarmSetTime
-
-        if (secondsRemaining <= 0) {
+        else {
             // finished in the background
             onTimerFinished()
         }
@@ -125,8 +127,6 @@ class MainActivity : AppCompatActivity() {
         streak += 1
         PrefUtil.setStreak(streak, this)
 
-
-        // progress_countdown.progress = 0
 
         PrefUtil.setSecondsRemaining(timerLengthSeconds, this)
         secondsRemaining = timerLengthSeconds
