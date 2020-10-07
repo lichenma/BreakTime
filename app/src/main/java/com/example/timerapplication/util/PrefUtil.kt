@@ -30,7 +30,16 @@ class PrefUtil {
 
         private const val PREVIOUS_TIMER_LENGTH_SECONDS_ID = "com.example.timerapplication.timer.previous_timer_length_seconds"
 
+        fun getPreviousTimerLengthSeconds(context: Context): Long{
+            val preferences = PreferenceManager.getDefaultSharedPreferences(context)
+            return preferences.getLong(PREVIOUS_TIMER_LENGTH_SECONDS_ID, 0)
+        }
 
+        fun setPreviousTimerLengthSeconds(seconds: Long, context: Context){
+            val editor = PreferenceManager.getDefaultSharedPreferences(context).edit()
+            editor.putLong(PREVIOUS_TIMER_LENGTH_SECONDS_ID, seconds)
+            editor.apply()
+        }
 
         private const val TIMER_STATE_ID = "com.example.timerapplication.timer.timer_state"
 

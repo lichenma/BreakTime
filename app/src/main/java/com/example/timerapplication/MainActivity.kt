@@ -21,6 +21,24 @@ import java.util.*
 class MainActivity : AppCompatActivity() {
 
     companion object {
+        fun setAlarm(context: Context, nowSeconds: Long, secondsRemaining: Long): Long{
+            val wakeUpTime = (nowSeconds + secondsRemaining) * 1000
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(context, TimerExpiredReceiver::class.java)
+            val pendingIntent = PendingIntent.getBroadcast(context, 0, intent, 0)
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, wakeUpTime, pendingIntent)
+            PrefUtil.setAlarmSetTime(nowSeconds, context)
+            return wakeUpTime
+        }
+
+        fun removeAlarm(context: Context){
+            val intent = Intent(context, TimerExpiredReceiver::class.java)
+            val pendingIntent = PendingIntent.getBroadcast(context, 0, intent, 0)
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            alarmManager.cancel(pendingIntent)
+            PrefUtil.setAlarmSetTime(0, context)
+        }
+
         // Immutable property
         val nowSeconds: Long
             get() = Calendar.getInstance().timeInMillis / 1000
@@ -51,6 +69,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         initTimer()
+        removeAlarm(this)
     }
 
     /*
@@ -64,7 +83,9 @@ class MainActivity : AppCompatActivity() {
 
         when(timerState) {
             TimerState.Running -> {
-                PrefUtil.setAlarmSetTime(nowSeconds, this)
+                timer.cancel()
+                val wakeUpTime = setAlarm(this, nowSeconds, secondsRemaining)
+
                 var pm = this.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
                 if (pm.isInteractive){
                     // This means we left the app with time to spare - we want to remove the streak
@@ -78,7 +99,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             TimerState.Done -> {
-                PrefUtil.setTimerState(timerState, this)
+
             }
             TimerState.Succeeded -> {
                 var pm = this.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -96,11 +117,7 @@ class MainActivity : AppCompatActivity() {
     private fun initTimer(){
         timerState = PrefUtil.getTimerState(this)
 
-        if (timerState == TimerState.Done || timerState == TimerState.Running){
-            startTimer()
-            PrefUtil.setTimerState(TimerState.Running, this)
-            progress_countdown.progress = 0
-        }
+        setPreviousTimerLength()
 
         secondsRemaining = if (timerState == TimerState.Running)
             PrefUtil.getSecondsRemaining(this)
@@ -108,14 +125,15 @@ class MainActivity : AppCompatActivity() {
             timerLengthSeconds
 
         val alarmSetTime = PrefUtil.getAlarmSetTime(this)
-
-        // alarm was set if the value is greater than 0
         if (alarmSetTime > 0)
             // gives us the amount of time the app was running in the background
             secondsRemaining -= nowSeconds - alarmSetTime
-        else {
+
+        if (secondsRemaining <= 0) {
             // finished in the background
             onTimerFinished()
+        } else {
+            startTimer()
         }
 
         updateCountdownUI()
@@ -145,6 +163,17 @@ class MainActivity : AppCompatActivity() {
                 updateCountdownUI()
             }
         }.start()
+    }
+
+    private fun setNewTimerLength(){
+        val lengthInMinutes = PrefUtil.getTimerLength(this)
+        timerLengthSeconds = (lengthInMinutes * 60L)
+        progress_countdown.max = timerLengthSeconds.toInt()
+    }
+
+    private fun setPreviousTimerLength(){
+        timerLengthSeconds = PrefUtil.getPreviousTimerLengthSeconds(this)
+        progress_countdown.max = timerLengthSeconds.toInt()
     }
 
     private fun updateCountdownUI(){
