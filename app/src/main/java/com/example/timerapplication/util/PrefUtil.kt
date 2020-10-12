@@ -9,7 +9,7 @@ class PrefUtil {
     // member defined in the companion object are like static objects
     companion object {
 
-        private const val TIMER_LENGTH = 10;
+        private const val TIMER_LENGTH = 20;
 
         fun getTimerLength(context: Context): Int{
             return TIMER_LENGTH

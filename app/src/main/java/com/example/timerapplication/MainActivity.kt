@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.os.PowerManager
+import android.os.health.TimerStat
 import com.google.android.material.snackbar.Snackbar
 import android.view.Menu
 import android.view.MenuItem
@@ -49,7 +50,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var timer: CountDownTimer
-    private var timerLengthSeconds: Long = PrefUtil.getTimerLength(this) * 60L
+    private var timerLengthSeconds: Long = 0
     private var timerState = TimerState.Running
     private var secondsRemaining: Long = 0
 
@@ -59,7 +60,8 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(toolbar)
         supportActionBar?.setIcon(R.drawable.ic_timer)
         supportActionBar?.title = "      🖐🤚 Minutes"
-        PrefUtil.setTimerState(TimerState.Done, this)
+        PrefUtil.setTimerState(TimerState.Running, this)
+        PrefUtil.setPreviousTimerLengthSeconds(PrefUtil.getTimerLength(this) * 60L, this)
         initTimer()
     }
 
@@ -68,6 +70,10 @@ class MainActivity : AppCompatActivity() {
      */
     override fun onResume() {
         super.onResume()
+        if (PrefUtil.getTimerState(this) == TimerState.Done){
+            PrefUtil.setTimerState(TimerState.Running, this)
+            PrefUtil.setSecondsRemaining(timerLengthSeconds, this)
+        }
         initTimer()
         removeAlarm(this)
     }
@@ -79,7 +85,6 @@ class MainActivity : AppCompatActivity() {
     @TargetApi(20)
     override fun onPause() {
         super.onPause()
-        timer.cancel()
 
         when(timerState) {
             TimerState.Running -> {
@@ -91,9 +96,10 @@ class MainActivity : AppCompatActivity() {
                     // This means we left the app with time to spare - we want to remove the streak
                     PrefUtil.setStreak(0, this)
                     PrefUtil.setTimerState(TimerState.Done, this)
-                    PrefUtil.setSecondsRemaining(timerLengthSeconds, this)
+                    PrefUtil.setSecondsRemaining(0, this)
                 } else {
                     // This means the user probably put the app to sleep we want to allow this action
+                    PrefUtil.setPreviousTimerLengthSeconds(timerLengthSeconds, this)
                     PrefUtil.setSecondsRemaining(secondsRemaining, this)
                     PrefUtil.setTimerState(timerState, this)
                 }
@@ -131,6 +137,7 @@ class MainActivity : AppCompatActivity() {
 
         if (secondsRemaining <= 0) {
             // finished in the background
+            timerState = TimerState.Succeeded
             onTimerFinished()
         } else {
             startTimer()
@@ -140,10 +147,13 @@ class MainActivity : AppCompatActivity() {
     }
     @TargetApi(20)
     private fun onTimerFinished(){
-        // means user has stayed for 10 mins and we can increment the counter
-        var streak = PrefUtil.getStreak(this)
-        streak += 1
-        PrefUtil.setStreak(streak, this)
+        setNewTimerLength()
+
+        if (timerState == TimerState.Succeeded){
+            var streak = PrefUtil.getStreak(this)
+            streak += 1
+            PrefUtil.setStreak(streak, this)
+        }
 
 
         PrefUtil.setSecondsRemaining(timerLengthSeconds, this)
@@ -183,7 +193,8 @@ class MainActivity : AppCompatActivity() {
         textView_countdown.text = "$minutesUntilFinished:${if (secondsStr.length == 2) secondsStr else "0" + secondsStr}"
         progress_countdown.progress = (timerLengthSeconds - secondsRemaining).toInt()
         var streak = PrefUtil.getStreak(this)
-        streak_count.text = "Current Streak is: ${streak}"
+        var state = PrefUtil.getTimerState(this)
+        streak_count.text = "Current Streak is: ${streak} \n Current state is ${state}"
 
     }
 
